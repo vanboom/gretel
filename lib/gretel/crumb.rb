@@ -40,6 +40,22 @@ module Gretel
       @links ||= []
     end
 
+    # Holds all of the breadcrumb's forward navigation links
+    def forwards
+      @forwards ||= []
+    end
+
+    # Sets a forward navigation link
+    def forward(*args)
+      options = args.extract_options!
+      text, url = args
+
+      # Transform objects to real paths.
+      url = url_for(url) if url
+
+      forwards << Gretel::Link.new(key, text, url, options.merge(fragment_class: "breadcrumb-item forward"))
+    end
+
     # Sets or gets the parent breadcrumb.
     # If you supply a parent key and optional arguments, it will set the parent.
     # If nothing is supplied, it will return the parent, if this has been set.

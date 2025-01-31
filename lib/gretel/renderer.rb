@@ -43,8 +43,9 @@ module Gretel
     def render(options)
       options = options_for_render(options)
       links = links_for_render(options)
-
-      LinkCollection.new(context, links, options)
+      forwards = forwards_for_render(options)
+      # combine the links and render
+      LinkCollection.new(context, links + forwards, options)
     end
 
     # Returns the parent breadcrumb.
@@ -103,6 +104,14 @@ module Gretel
       out
     end
 
+    ##
+    # gather the forward navigational links for rendering, more options concepts may apply later
+    def forwards_for_render(options={})
+      out = forwards.dup
+      out
+    end
+
+
     # Array of links for the path of the breadcrumb.
     # Also reloads the breadcrumb configuration if needed.
     def links
@@ -120,6 +129,16 @@ module Gretel
         links.unshift *parent_links_for(crumb)
 
         links
+      else
+        []
+      end
+    end
+
+    def forwards
+      @forwards = if @breadcrumb_key.present?
+        # Get breadcrumb set by the `breadcrumb` method
+        crumb = Gretel::Crumb.new(context, breadcrumb_key, *breadcrumb_args)
+        forwards = crumb.forwards.dup
       else
         []
       end
@@ -195,15 +214,22 @@ module Gretel
 
         renderer_class = options[:semantic] ? SemanticRenderer : NonSemanticRenderer
         renderer = renderer_class.new(context, options)
-        # Loop through all but the last (current) link and build HTML of the fragments
-        fragments = links[0..-2].map.with_index do |link, index|
-          renderer.render_fragment(link, index + 1)
+
+        # DVB - the current link is not the last link if we are using the 'forwards' navigation concept
+        # Use the link's internal sense of "current?" when rendering them
+        fragments = links.map.with_index do |link, index|
+          if link.current?
+            renderer.render_current_fragment(link, index + 1)
+          else
+            renderer.render_fragment(link, index + 1)
+          end
         end
 
+        # DVB: refactored into logic above since the link will hold its own current? status
         # The current link is handled a little differently, and is only linked if specified in the options
-        current_link = links.last
-        position = links.size
-        fragments << renderer.render_current_fragment(current_link, position)
+        # current_link = links.last
+        # position = links.size
+        # fragments << renderer.render_current_fragment(current_link, position)
 
         # Build the final HTML
         html_fragments = [
@@ -212,6 +238,7 @@ module Gretel
           renderer.render_posttext
         ]
         html = html_fragments.compact.join(" ").html_safe
+
         renderer.render_container(html)
       end
 
@@ -232,7 +259,8 @@ module Gretel
       end
 
       def render_fragment(link, position)
-        render_fragment_tag(fragment_tag, link.text, link.url, position, **fragment_options)
+        # DVB allow link options to pass through to the fragment rendering so we can set the 'forward' class
+        render_fragment_tag(fragment_tag, link.text, link.url, position, **(fragment_options.merge(link.options.slice(:fragment_class, :link_class))))
       end
 
       def render_current_fragment(link, position)
